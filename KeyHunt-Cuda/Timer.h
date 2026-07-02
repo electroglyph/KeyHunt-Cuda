@@ -19,6 +19,7 @@
 #define TIMERH
 
 #include <time.h>
+#include <stdint.h>
 #include <string>
 #ifdef WIN64
 #include <windows.h>

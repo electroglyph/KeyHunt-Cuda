@@ -18,7 +18,6 @@
 #include "SECP256k1.h"
 #include "hash/sha256.h"
 #include "hash/ripemd160.h"
-#include "hash/keccak160.h"
 #include "Base58.h"
 #include <string.h>
 
@@ -506,26 +505,6 @@ std::string Secp256K1::GetPublicKeyHex(bool compressed, Point& pubKey)
 
 }
 
-std::string Secp256K1::GetPublicKeyHexETH(Point& pubKey)
-{
-
-	unsigned char publicKeyBytes[64];
-	char tmp[3];
-	std::string ret;
-
-	// Full public key
-	pubKey.x.Get32Bytes(publicKeyBytes + 0);
-	pubKey.y.Get32Bytes(publicKeyBytes + 32);
-
-	for (int i = 0; i < 64; i++) {
-		sprintf(tmp, "%02X", (int)publicKeyBytes[i]);
-		ret.append(tmp);
-	}
-
-	return ret;
-
-}
-
 void Secp256K1::GetPubKeyBytes(bool compressed, Point& pubKey, unsigned char* publicKeyBytes)
 {
 	if (!compressed) {
@@ -601,11 +580,6 @@ void Secp256K1::GetHash160(bool compressed, Point& pubKey, unsigned char* hash)
 
 }
 
-void Secp256K1::GetHashETH(Point& pubKey, unsigned char* hash)
-{
-	keccak160(pubKey.x.bits64, pubKey.y.bits64, (uint32_t*)hash);
-}
-
 std::string Secp256K1::GetPrivAddress(bool compressed, Int& privKey)
 {
 
@@ -631,21 +605,6 @@ std::string Secp256K1::GetPrivAddress(bool compressed, Int& privKey)
 	}
 
 }
-
-//std::string Secp256K1::GetPrivAddressETH(Int& privKey)
-//{
-//
-//	unsigned char address[38];
-//
-//	address[0] = 0x80; // Mainnet
-//	privKey.Get32Bytes(address + 1);
-//
-//	// Compute checksum
-//	sha256_checksum(address, 33, address + 33);
-//	return EncodeBase58(address, address + 37);
-//
-//
-//}
 
 #define CHECKSUM(buff,A) \
 (buff)[0] = (uint32_t)A[0] << 24 | (uint32_t)A[1] << 16 | (uint32_t)A[2] << 8 | (uint32_t)A[3];\
@@ -717,20 +676,6 @@ std::string Secp256K1::GetAddress(bool compressed, unsigned char* hash160)
 
 }
 
-std::string Secp256K1::GetAddressETH(unsigned char* hash)
-{
-	char tmp[3];
-	std::string ret;
-
-	ret.append("0x");
-	for (int i = 0; i < 20; i++) {
-		sprintf(tmp, "%02x", ((uint8_t*)hash)[i]);
-		ret.append(tmp);
-	}
-
-	return ret;
-}
-
 std::string Secp256K1::GetAddress(bool compressed, Point& pubKey)
 {
 
@@ -744,23 +689,6 @@ std::string Secp256K1::GetAddress(bool compressed, Point& pubKey)
 	// Base58
 	return EncodeBase58(address, address + 25);
 
-}
-
-std::string Secp256K1::GetAddressETH(Point& pubKey)
-{
-	uint32_t hash[5];
-	char tmp[3];
-	std::string ret;
-
-	keccak160(pubKey.x.bits64, pubKey.y.bits64, hash);
-
-	ret.append("0x");
-	for (int i = 0; i < 20; i++) {
-		sprintf(tmp, "%02x", ((uint8_t*)hash)[i]);
-		ret.append(tmp);
-	}
-
-	return ret;
 }
 
 bool Secp256K1::CheckPudAddress(std::string address)

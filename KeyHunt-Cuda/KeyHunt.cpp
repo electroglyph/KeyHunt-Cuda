@@ -2,7 +2,6 @@
 #include "GmpUtil.h"
 #include "Base58.h"
 #include "hash/sha256.h"
-#include "hash/keccak160.h"
 #include "IntGroup.h"
 #include "Timer.h"
 #include "hash/ripemd160.h"
@@ -22,7 +21,7 @@ Point _2Gn;
 
 // ----------------------------------------------------------------------------
 
-KeyHunt::KeyHunt(const std::string& inputFile, int compMode, int searchMode, int coinType, bool useGpu,
+KeyHunt::KeyHunt(const std::string& inputFile, int compMode, int searchMode, bool useGpu,
 	const std::string& outputFile, bool useSSE, uint32_t maxFound, uint64_t rKey,
 	const std::string& rangeStart, const std::string& rangeEnd, bool& should_exit)
 {
@@ -35,7 +34,6 @@ KeyHunt::KeyHunt(const std::string& inputFile, int compMode, int searchMode, int
 	this->maxFound = maxFound;
 	this->rKey = rKey;
 	this->searchMode = searchMode;
-	this->coinType = coinType;
 	this->rangeStart.SetBase16(rangeStart.c_str());
 	this->rangeEnd.SetBase16(rangeEnd.c_str());
 	this->rangeDiff2.Set(&this->rangeEnd);
@@ -107,15 +105,10 @@ KeyHunt::KeyHunt(const std::string& inputFile, int compMode, int searchMode, int
 	BLOOM_N = bloom->get_bytes();
 	TOTAL_COUNT = N;
 	targetCounter = i;
-	if (coinType == COIN_BTC) {
-		if (searchMode == (int)SEARCH_MODE_MA)
-			printf("Loaded       : %s Bitcoin addresses\n", formatThousands(i).c_str());
-		else if (searchMode == (int)SEARCH_MODE_MX)
-			printf("Loaded       : %s Bitcoin xpoints\n", formatThousands(i).c_str());
-	}
-	else {
-		printf("Loaded       : %s Ethereum addresses\n", formatThousands(i).c_str());
-	}
+	if (searchMode == (int)SEARCH_MODE_MA)
+		printf("Loaded       : %s Bitcoin addresses\n", formatThousands(i).c_str());
+	else if (searchMode == (int)SEARCH_MODE_MX)
+		printf("Loaded       : %s Bitcoin xpoints\n", formatThousands(i).c_str());
 
 	printf("\n");
 
@@ -128,7 +121,7 @@ KeyHunt::KeyHunt(const std::string& inputFile, int compMode, int searchMode, int
 
 // ----------------------------------------------------------------------------
 
-KeyHunt::KeyHunt(const std::vector<unsigned char>& hashORxpoint, int compMode, int searchMode, int coinType,
+KeyHunt::KeyHunt(const std::vector<unsigned char>& hashORxpoint, int compMode, int searchMode,
 	bool useGpu, const std::string& outputFile, bool useSSE, uint32_t maxFound, uint64_t rKey,
 	const std::string& rangeStart, const std::string& rangeEnd, bool& should_exit)
 {
@@ -140,7 +133,6 @@ KeyHunt::KeyHunt(const std::vector<unsigned char>& hashORxpoint, int compMode, i
 	this->maxFound = maxFound;
 	this->rKey = rKey;
 	this->searchMode = searchMode;
-	this->coinType = coinType;
 	this->rangeStart.SetBase16(rangeStart.c_str());
 	this->rangeEnd.SetBase16(rangeEnd.c_str());
 	this->rangeDiff2.Set(&this->rangeEnd);
@@ -153,7 +145,7 @@ KeyHunt::KeyHunt(const std::vector<unsigned char>& hashORxpoint, int compMode, i
 	if (this->searchMode == (int)SEARCH_MODE_SA) {
 		assert(hashORxpoint.size() == 20);
 		for (size_t i = 0; i < hashORxpoint.size(); i++) {
-			((uint8_t*)hash160Keccak)[i] = hashORxpoint.at(i);
+			((uint8_t*)hash160)[i] = hashORxpoint.at(i);
 		}
 	}
 	else if (this->searchMode == (int)SEARCH_MODE_SX) {
@@ -246,10 +238,8 @@ void KeyHunt::output(std::string addr, std::string pAddr, std::string pAddrHex, 
 	fprintf(stdout, "\n=================================================================================\n");
 	fprintf(stdout, "PubAddress: %s\n", addr.c_str());
 
-	if (coinType == COIN_BTC) {
-		fprintf(f, "Priv (WIF): p2pkh:%s\n", pAddr.c_str());
-		fprintf(stdout, "Priv (WIF): p2pkh:%s\n", pAddr.c_str());
-	}
+	fprintf(f, "Priv (WIF): p2pkh:%s\n", pAddr.c_str());
+	fprintf(stdout, "Priv (WIF): p2pkh:%s\n", pAddr.c_str());
 
 	fprintf(f, "Priv (HEX): %s\n", pAddrHex.c_str());
 	fprintf(stdout, "Priv (HEX): %s\n", pAddrHex.c_str());
@@ -302,38 +292,6 @@ bool KeyHunt::checkPrivKey(std::string addr, Int& key, int32_t incr, bool mode)
 		}
 	}
 	output(addr, secp->GetPrivAddress(mode, k), k.GetBase16(), secp->GetPublicKeyHex(mode, p));
-	return true;
-}
-
-bool KeyHunt::checkPrivKeyETH(std::string addr, Int& key, int32_t incr)
-{
-	Int k(&key), k2(&key);
-	k.Add((uint64_t)incr);
-	k2.Add((uint64_t)incr);
-	// Check addresses
-	Point p = secp->ComputePublicKey(&k);
-	std::string px = p.x.GetBase16();
-	std::string chkAddr = secp->GetAddressETH(p);
-	if (chkAddr != addr) {
-		//Key may be the opposite one (negative zero or compressed key)
-		k.Neg();
-		k.Add(&secp->order);
-		p = secp->ComputePublicKey(&k);
-		std::string chkAddr = secp->GetAddressETH(p);
-		if (chkAddr != addr) {
-			printf("\n=================================================================================\n");
-			printf("Warning, wrong private key generated !\n");
-			printf("  PivK :%s\n", k2.GetBase16().c_str());
-			printf("  Addr :%s\n", addr.c_str());
-			printf("  PubX :%s\n", px.c_str());
-			printf("  PivK :%s\n", k.GetBase16().c_str());
-			printf("  Check:%s\n", chkAddr.c_str());
-			printf("  PubX :%s\n", p.x.GetBase16().c_str());
-			printf("=================================================================================\n");
-			return false;
-		}
-	}
-	output(addr, k.GetBase16()/*secp->GetPrivAddressETH(k)*/, k.GetBase16(), secp->GetPublicKeyHexETH(p));
 	return true;
 }
 
@@ -391,22 +349,6 @@ void KeyHunt::checkMultiAddresses(bool compressed, Int key, int i, Point p1)
 
 // ----------------------------------------------------------------------------
 
-void KeyHunt::checkMultiAddressesETH(Int key, int i, Point p1)
-{
-	unsigned char h0[20];
-
-	// Point
-	secp->GetHashETH(p1, h0);
-	if (CheckBloomBinary(h0, 20) > 0) {
-		std::string addr = secp->GetAddressETH(h0);
-		if (checkPrivKeyETH(addr, key, i)) {
-			nbFoundKey++;
-		}
-	}
-}
-
-// ----------------------------------------------------------------------------
-
 void KeyHunt::checkSingleAddress(bool compressed, Int key, int i, Point p1)
 {
 	unsigned char h0[20];
@@ -416,22 +358,6 @@ void KeyHunt::checkSingleAddress(bool compressed, Int key, int i, Point p1)
 	if (MatchHash((uint32_t*)h0)) {
 		std::string addr = secp->GetAddress(compressed, h0);
 		if (checkPrivKey(addr, key, i, compressed)) {
-			nbFoundKey++;
-		}
-	}
-}
-
-// ----------------------------------------------------------------------------
-
-void KeyHunt::checkSingleAddressETH(Int key, int i, Point p1)
-{
-	unsigned char h0[20];
-
-	// Point
-	secp->GetHashETH(p1, h0);
-	if (MatchHash((uint32_t*)h0)) {
-		std::string addr = secp->GetAddressETH(h0);
-		if (checkPrivKeyETH(addr, key, i)) {
 			nbFoundKey++;
 		}
 	}
@@ -727,82 +653,66 @@ void KeyHunt::FindKeyCPU(TH_PARAM * ph)
 			}
 		}
 		else {
-			if (coinType == COIN_BTC) {
-				for (int i = 0; i < CPU_GRP_SIZE && !endOfSearch; i++) {
-					switch (compMode) {
-					case SEARCH_COMPRESSED:
-						switch (searchMode) {
-						case (int)SEARCH_MODE_MA:
-							checkMultiAddresses(true, key, i, pts[i]);
-							break;
-						case (int)SEARCH_MODE_SA:
-							checkSingleAddress(true, key, i, pts[i]);
-							break;
-						case (int)SEARCH_MODE_MX:
-							checkMultiXPoints(true, key, i, pts[i]);
-							break;
-						case (int)SEARCH_MODE_SX:
-							checkSingleXPoint(true, key, i, pts[i]);
-							break;
-						default:
-							break;
-						}
-						break;
-					case SEARCH_UNCOMPRESSED:
-						switch (searchMode) {
-						case (int)SEARCH_MODE_MA:
-							checkMultiAddresses(false, key, i, pts[i]);
-							break;
-						case (int)SEARCH_MODE_SA:
-							checkSingleAddress(false, key, i, pts[i]);
-							break;
-						case (int)SEARCH_MODE_MX:
-							checkMultiXPoints(false, key, i, pts[i]);
-							break;
-						case (int)SEARCH_MODE_SX:
-							checkSingleXPoint(false, key, i, pts[i]);
-							break;
-						default:
-							break;
-						}
-						break;
-					case SEARCH_BOTH:
-						switch (searchMode) {
-						case (int)SEARCH_MODE_MA:
-							checkMultiAddresses(true, key, i, pts[i]);
-							checkMultiAddresses(false, key, i, pts[i]);
-							break;
-						case (int)SEARCH_MODE_SA:
-							checkSingleAddress(true, key, i, pts[i]);
-							checkSingleAddress(false, key, i, pts[i]);
-							break;
-						case (int)SEARCH_MODE_MX:
-							checkMultiXPoints(true, key, i, pts[i]);
-							checkMultiXPoints(false, key, i, pts[i]);
-							break;
-						case (int)SEARCH_MODE_SX:
-							checkSingleXPoint(true, key, i, pts[i]);
-							checkSingleXPoint(false, key, i, pts[i]);
-							break;
-						default:
-							break;
-						}
-						break;
-					}
-				}
-			}
-			else {
-				for (int i = 0; i < CPU_GRP_SIZE && !endOfSearch; i++) {
+			for (int i = 0; i < CPU_GRP_SIZE && !endOfSearch; i++) {
+				switch (compMode) {
+				case SEARCH_COMPRESSED:
 					switch (searchMode) {
 					case (int)SEARCH_MODE_MA:
-						checkMultiAddressesETH(key, i, pts[i]);
+						checkMultiAddresses(true, key, i, pts[i]);
 						break;
 					case (int)SEARCH_MODE_SA:
-						checkSingleAddressETH(key, i, pts[i]);
+						checkSingleAddress(true, key, i, pts[i]);
+						break;
+					case (int)SEARCH_MODE_MX:
+						checkMultiXPoints(true, key, i, pts[i]);
+						break;
+					case (int)SEARCH_MODE_SX:
+						checkSingleXPoint(true, key, i, pts[i]);
 						break;
 					default:
 						break;
 					}
+					break;
+				case SEARCH_UNCOMPRESSED:
+					switch (searchMode) {
+					case (int)SEARCH_MODE_MA:
+						checkMultiAddresses(false, key, i, pts[i]);
+						break;
+					case (int)SEARCH_MODE_SA:
+						checkSingleAddress(false, key, i, pts[i]);
+						break;
+					case (int)SEARCH_MODE_MX:
+						checkMultiXPoints(false, key, i, pts[i]);
+						break;
+					case (int)SEARCH_MODE_SX:
+						checkSingleXPoint(false, key, i, pts[i]);
+						break;
+					default:
+						break;
+					}
+					break;
+				case SEARCH_BOTH:
+					switch (searchMode) {
+					case (int)SEARCH_MODE_MA:
+						checkMultiAddresses(true, key, i, pts[i]);
+						checkMultiAddresses(false, key, i, pts[i]);
+						break;
+					case (int)SEARCH_MODE_SA:
+						checkSingleAddress(true, key, i, pts[i]);
+						checkSingleAddress(false, key, i, pts[i]);
+						break;
+					case (int)SEARCH_MODE_MX:
+						checkMultiXPoints(true, key, i, pts[i]);
+						checkMultiXPoints(false, key, i, pts[i]);
+						break;
+					case (int)SEARCH_MODE_SX:
+						checkSingleXPoint(true, key, i, pts[i]);
+						checkSingleXPoint(false, key, i, pts[i]);
+						break;
+					default:
+						break;
+					}
+					break;
 				}
 			}
 		}
@@ -876,15 +786,15 @@ void KeyHunt::FindKeyGPU(TH_PARAM * ph)
 	switch (searchMode) {
 	case (int)SEARCH_MODE_MA:
 	case (int)SEARCH_MODE_MX:
-		g = new GPUEngine(secp, ph->gridSizeX, ph->gridSizeY, ph->gpuId, maxFound, searchMode, compMode, coinType,
+		g = new GPUEngine(secp, ph->gridSizeX, ph->gridSizeY, ph->gpuId, maxFound, searchMode, compMode,
 			BLOOM_N, bloom->get_bits(), bloom->get_hashes(), bloom->get_bf(), DATA, TOTAL_COUNT, (rKey != 0));
 		break;
 	case (int)SEARCH_MODE_SA:
-		g = new GPUEngine(secp, ph->gridSizeX, ph->gridSizeY, ph->gpuId, maxFound, searchMode, compMode, coinType,
-			hash160Keccak, (rKey != 0));
+		g = new GPUEngine(secp, ph->gridSizeX, ph->gridSizeY, ph->gpuId, maxFound, searchMode, compMode,
+			hash160, (rKey != 0));
 		break;
 	case (int)SEARCH_MODE_SX:
-		g = new GPUEngine(secp, ph->gridSizeX, ph->gridSizeY, ph->gpuId, maxFound, searchMode, compMode, coinType,
+		g = new GPUEngine(secp, ph->gridSizeX, ph->gridSizeY, ph->gpuId, maxFound, searchMode, compMode,
 			xpoint, (rKey != 0));
 		break;
 	default:
@@ -924,17 +834,9 @@ void KeyHunt::FindKeyGPU(TH_PARAM * ph)
 			ok = g->LaunchSEARCH_MODE_MA(found, false);
 			for (int i = 0; i < (int)found.size() && !endOfSearch; i++) {
 				ITEM it = found[i];
-				if (coinType == COIN_BTC) {
-					std::string addr = secp->GetAddress(it.mode, it.hash);
-					if (checkPrivKey(addr, keys[it.thId], it.incr, it.mode)) {
-						nbFoundKey++;
-					}
-				}
-				else {
-					std::string addr = secp->GetAddressETH(it.hash);
-					if (checkPrivKeyETH(addr, keys[it.thId], it.incr)) {
-						nbFoundKey++;
-					}
+				std::string addr = secp->GetAddress(it.mode, it.hash);
+				if (checkPrivKey(addr, keys[it.thId], it.incr, it.mode)) {
+					nbFoundKey++;
 				}
 			}
 			break;
@@ -954,17 +856,9 @@ void KeyHunt::FindKeyGPU(TH_PARAM * ph)
 			ok = g->LaunchSEARCH_MODE_SA(found, false);
 			for (int i = 0; i < (int)found.size() && !endOfSearch; i++) {
 				ITEM it = found[i];
-				if (coinType == COIN_BTC) {
-					std::string addr = secp->GetAddress(it.mode, it.hash);
-					if (checkPrivKey(addr, keys[it.thId], it.incr, it.mode)) {
-						nbFoundKey++;
-					}
-				}
-				else {
-					std::string addr = secp->GetAddressETH(it.hash);
-					if (checkPrivKeyETH(addr, keys[it.thId], it.incr)) {
-						nbFoundKey++;
-					}
+				std::string addr = secp->GetAddress(it.mode, it.hash);
+				if (checkPrivKey(addr, keys[it.thId], it.incr, it.mode)) {
+					nbFoundKey++;
 				}
 			}
 			break;
@@ -1305,11 +1199,11 @@ int KeyHunt::CheckBloomBinary(const uint8_t * _xx, uint32_t K_LENGTH)
 
 bool KeyHunt::MatchHash(uint32_t * _h)
 {
-	if (_h[0] == hash160Keccak[0] &&
-		_h[1] == hash160Keccak[1] &&
-		_h[2] == hash160Keccak[2] &&
-		_h[3] == hash160Keccak[3] &&
-		_h[4] == hash160Keccak[4]) {
+	if (_h[0] == hash160[0] &&
+		_h[1] == hash160[1] &&
+		_h[2] == hash160[2] &&
+		_h[3] == hash160[3] &&
+		_h[4] == hash160[4]) {
 		return true;
 	}
 	else {
