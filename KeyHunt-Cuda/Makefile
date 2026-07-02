@@ -129,4 +129,5 @@ clean:
 	@rm -f obj/*.o
 	@rm -f obj/GPU/*.o
 	@rm -f obj/hash/*.o
+	@rm -f KeyHunt
 
