@@ -33,7 +33,7 @@ public:
 	void Init();
 	Point ComputePublicKey(Int* privKey);
 	Point NextKey(Point& key);
-	void Check();
+	bool Check();
 	bool  EC(Point& p);
 
 	void GetHash160(bool compressed,

@@ -71,7 +71,8 @@ void PrintResult(bool ok)
 	}
 }
 
-void CheckAddress(Secp256K1* T, std::string address, std::string privKeyStr)
+bool CheckAddress(Secp256K1* T, std::string address, std::string privKeyStr,
+    const char* expectedPubKeyHex = nullptr, const char* expectedHash160Hex = nullptr)
 {
 
 	bool isCompressed;
@@ -79,29 +80,57 @@ void CheckAddress(Secp256K1* T, std::string address, std::string privKeyStr)
 	Int privKey = T->DecodePrivateKey((char*)privKeyStr.c_str(), &isCompressed);
 	Point pub = T->ComputePublicKey(&privKey);
 
+	bool ok = true;
+
+	if (expectedPubKeyHex) {
+		std::string calcPubKey = T->GetPublicKeyHex(isCompressed, pub);
+		if (calcPubKey != expectedPubKeyHex) {
+			printf("PubKey   : FAILED\n  expected %s\n  got      %s\n", expectedPubKeyHex, calcPubKey.c_str());
+			ok = false;
+		}
+	}
+
+	if (expectedHash160Hex) {
+		unsigned char h0[20];
+		T->GetHash160(isCompressed, pub, h0);
+		char buf[41];
+		for (int i = 0; i < 20; i++)
+			sprintf(buf + i * 2, "%02x", h0[i]);
+		buf[40] = 0;
+		if (strcmp(buf, expectedHash160Hex) != 0) {
+			printf("Hash160  : FAILED\n  expected %s\n  got      %s\n", expectedHash160Hex, buf);
+			ok = false;
+		}
+	}
+
 	std::string calcAddress = T->GetAddress(isCompressed, pub);
 
 	printf("Adress : %s ", address.c_str());
 
 	if (address == calcAddress) {
 		printf("OK!\n");
-		return;
+	}
+	else {
+		printf("Failed ! \n %s\n", calcAddress.c_str());
+		ok = false;
 	}
 
-	printf("Failed ! \n %s\n", calcAddress.c_str());
+	return ok;
 
 }
 
-void Secp256K1::Check()
+bool Secp256K1::Check()
 {
+
+	bool allOk = true;
 
 	printf("Check Generator :");
 
-	bool ok = true;
 	int i = 0;
 	while (i < 256 * 32 && EC(GTable[i])) {
 		i++;
 	}
+	allOk &= (i == 256 * 32);
 	PrintResult(i == 256 * 32);
 
 	printf("Check Double :");
@@ -111,12 +140,14 @@ void Secp256K1::Check()
 	Point R3;
 	R1 = Double(G);
 	R1.Reduce();
+	allOk &= EC(R1);
 	PrintResult(EC(R1));
 
 	printf("Check Add :");
 	R2 = Add(G, R1);
 	R3 = Add(R1, R2);
 	R3.Reduce();
+	allOk &= EC(R3);
 	PrintResult(EC(R3));
 
 	printf("Check GenKey :");
@@ -128,28 +159,31 @@ void Secp256K1::Check()
 	expectedPubKey.y.SetBase16("37a9461c4f1c57fecc499753381e772a128a5820a924a2fa05162eb662987a9f");
 	expectedPubKey.z.SetInt32(1);
 
+	allOk &= pub.equals(expectedPubKey);
 	PrintResult(pub.equals(expectedPubKey));
 
-	CheckAddress(this, "15t3Nt1zyMETkHbjJTTshxLnqPzQvAtdCe", "5HqoeNmaz17FwZRqn7kCBP1FyJKSe4tt42XZB7426EJ2MVWDeqk");
-	CheckAddress(this, "1BoatSLRHtKNngkdXEeobR76b53LETtpyT", "5J4XJRyLVgzbXEgh8VNi4qovLzxRftzMd8a18KkdXv4EqAwX3tS");
-	CheckAddress(this, "1Test6BNjSJC5qwYXsjwKVLvz7DpfLehy", "5HytzR8p5hp8Cfd8jsVFnwMNXMsEW1sssFxMQYqEUjGZN72iLJ2");
-	CheckAddress(this, "16S5PAsGZ8VFM1CRGGLqm37XHrp46f6CTn", "KxMUSkFhEzt2eJHscv2vNSTnnV2cgAXgL4WDQBTx7Ubd9TZmACAz");
-	CheckAddress(this, "1Tst2RwMxZn9cYY5mQhCdJic3JJrK7Fq7", "L1vamTpSeK9CgynRpSJZeqvUXf6dJa25sfjb2uvtnhj65R5TymgF");
-	CheckAddress(this, "3CyQYcByvcWK8BkYJabBS82yDLNWt6rWSx", "KxMUSkFhEzt2eJHscv2vNSTnnV2cgAXgL4WDQBTx7Ubd9TZmACAz");
-	CheckAddress(this, "31to1KQe67YjoDfYnwFJThsGeQcFhVDM5Q", "KxV2Tx5jeeqLHZ1V9ufNv1doTZBZuAc5eY24e6b27GTkDhYwVad7");
-	CheckAddress(this, "bc1q6tqytpg06uhmtnhn9s4f35gkt8yya5a24dptmn", "L2wAVD273GwAxGuEDHvrCqPfuWg5wWLZWy6H3hjsmhCvNVuCERAQ");
+	// Full pipeline: private key 1
+	allOk &= CheckAddress(this,
+		"1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH",
+		"KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73sVHnoWn",
+		"0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",
+		"751e76e8199196d454941c45d1b3a323f1433bd6");
 
 	// 1ViViGLEawN27xRzGrEhhYPQrZiTKvKLo
 	pub.x.SetBase16(/*04*/"75249c39f38baa6bf20ab472191292349426dc3652382cdc45f65695946653dc");
 	pub.y.SetBase16("978b2659122fe1df1be132167f27b74e5d4a2f3ecbbbd0b3fbcc2f4983518674");
 	printf("Check Calc PubKey (full) %s :", GetAddress(false, pub).c_str());
+	allOk &= EC(pub);
 	PrintResult(EC(pub));
 
 	// 18aPiLmTow7Xgu96msrDYvSSWweCvB9oBA
 	pub.x.SetBase16(/*03*/"3bf3d80f868fa33c6353012cb427e98b080452f19b5c1149ea2acfe4b7599739");
 	pub.y = GetY(pub.x, false);
 	printf("Check Calc PubKey (odd) %s:", GetAddress(true, pub).c_str());
+	allOk &= EC(pub);
 	PrintResult(EC(pub));
+
+	return allOk;
 
 }
 

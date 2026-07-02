@@ -245,20 +245,24 @@ int main(int argc, char** argv)
 				usage();
 				return 0;
 			}
-			else if (optArg.equals("-c", "--check")) {
-				printf("KeyHunt-Cuda v" RELEASE "\n\n");
-				printf("\nChecking... Secp256K1\n\n");
-				Secp256K1* secp = new Secp256K1();
-				secp->Init();
-				secp->Check();
-				printf("\n\nChecking... Int\n\n");
-				Int* K = new Int();
-				K->SetBase16("3EF7CEF65557B61DC4FF2313D0049C584017659A32B002C105D04A19DA52CB47");
-				K->Check();
-				delete secp;
-				delete K;
-				printf("\n\nChecked successfully\n\n");
-				return 0;
+		else if (optArg.equals("-c", "--check")) {
+			printf("KeyHunt-Cuda v" RELEASE "\n\n");
+			printf("\nChecking... Secp256K1\n\n");
+			Secp256K1* secp = new Secp256K1();
+			secp->Init();
+			bool secpOk = secp->Check();
+			printf("\n\nChecking... Int\n\n");
+			Int* K = new Int();
+			K->SetBase16("3EF7CEF65557B61DC4FF2313D0049C584017659A32B002C105D04A19DA52CB47");
+			K->Check();
+			delete secp;
+			delete K;
+			if (!secpOk) {
+				printf("\n\nCheck FAILED\n\n");
+				return 1;
+			}
+			printf("\n\nChecked successfully\n\n");
+			return 0;
 			}
 			else if (optArg.equals("-l", "--list")) {
 #ifdef WITHGPU
