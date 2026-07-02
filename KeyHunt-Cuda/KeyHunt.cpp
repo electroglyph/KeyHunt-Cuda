@@ -906,6 +906,8 @@ void KeyHunt::FindKeyGPU(TH_PARAM * ph)
 
 	}
 
+	lastKey.Set(&keys[0]);
+
 	delete[] keys;
 	delete[] p;
 	delete g;
@@ -1157,6 +1159,13 @@ void KeyHunt::Search(int nbThread, std::vector<int> gpuId, std::vector<int> grid
 		t0 = t1;
 		if (should_exit || nbFoundKey >= targetCounter || completedPerc > 100.5)
 			endOfSearch = true;
+	}
+
+	if (should_exit) {
+		if (useGpu) {
+			printf("\nResume range: --range %s:%s\n",
+				lastKey.GetBase16().c_str(), rangeEnd.GetBase16().c_str());
+		}
 	}
 
 	free(params);

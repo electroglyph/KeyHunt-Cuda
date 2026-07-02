@@ -104,6 +104,7 @@ private:
 
 	bool useTiling;
 	bool benchmarkTiling;
+	Int lastKey;
 
 	std::string outputFile;
 	std::string inputFile;

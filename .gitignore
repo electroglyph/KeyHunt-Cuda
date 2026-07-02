@@ -1,5 +1,8 @@
 obj/
 BinSort
 KeyHunt-Cuda
-
-
+addresses.py
+*.bin
+*.pyc
+__pycache__
+convert.py

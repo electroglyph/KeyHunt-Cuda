@@ -162,8 +162,8 @@ BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
 }
 #else
 void CtrlHandler(int signum) {
-	printf("\n\nBYE\n");
-	exit(signum);
+	printf("\n\nCtrl+C — stopping...\n");
+	should_exit = true;
 }
 #endif
 
