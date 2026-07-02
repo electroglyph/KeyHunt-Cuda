@@ -57,6 +57,7 @@
 //__device__ __constant__ uint64_t _beta2[] = { 0x3EC693D68E6AFA40ULL, 0x630FB68AED0A766AULL, 0x919BB86153CBCB16ULL, 0x851695D49A83F8EFULL };
 
 #define HSIZE (GRP_SIZE / 2 - 1)
+#define TILE_SIZE 128
 
 // 64bits lsb negative inverse of P (mod 2^64)
 #define MM64 0xD838091DD2253531ULL

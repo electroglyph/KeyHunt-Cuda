@@ -367,6 +367,46 @@ __device__ __noinline__ void CheckPubSEARCH_MODE_SX(uint32_t mode, uint64_t* px,
 
 // -----------------------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------------------
+// Tiled batch modular inverse — processes `count` elements in-place.
+// Forward pass overwrites r[0..count-1] with prefix products.
+// Reverse pass reloads original dx[i] from Gx[base+i] - sx (broadcast = free).
+// Eliminates subp[1025][4] — saves 32 KB per thread.
+// ---------------------------------------------------------------------------------------
+__device__ void _ModInvGroupedTiled(uint64_t* r, uint32_t count, uint64_t* sx, uint32_t base)
+{
+	for (uint32_t i = 1; i < count; i++)
+		_ModMult(r + 4 * i, r + 4 * (i - 1), r + 4 * i);
+
+	uint64_t inv[5];
+	Load256(inv, r + 4 * (count - 1));
+	inv[4] = 0;
+	_ModInv(inv);
+
+	uint64_t orig[4];
+	uint64_t prev[4];
+	for (uint32_t i = count - 1; i > 0; i--) {
+		Load256(prev, r + 4 * (i - 1));
+		ModSub256(orig, Gx + 4 * (base + i), sx);
+		_ModMult(r + 4 * i, prev, inv);
+		_ModMult(inv, inv, orig);
+	}
+	Load256(r, inv);
+}
+
+// ---------------------------------------------------------------------------------------
+
+__device__ void _ModInv256(uint64_t* r)
+{
+	uint64_t inv[5];
+	Load256(inv, r);
+	inv[4] = 0;
+	_ModInv(inv);
+	Load256(r, inv);
+}
+
+// ---------------------------------------------------------------------------------------
+
 #define CHECK_HASH_SEARCH_MODE_MA(incr) CheckHashSEARCH_MODE_MA(mode, px, py, incr, bloomLookUp, BLOOM_BITS, BLOOM_HASHES, maxFound, out)
 
 __device__ void ComputeKeysSEARCH_MODE_MA(uint32_t mode, uint64_t* startx, uint64_t* starty,
@@ -873,5 +913,405 @@ __device__ void ComputeKeysSEARCH_MODE_SX(uint32_t mode, uint64_t* startx, uint6
 	Store256A(startx, px);
 	Store256A(starty, py);
 
+}
+
+// ============================================================================
+// TILED VARIANTS — dx[] reduced from 32 KB to TILE_SIZE*32 bytes per thread.
+// Each tile does an independent batch-inverse; two extra single inversions
+// handle the first-point and next-center delta.
+// ============================================================================
+
+__device__ void ComputeKeysSEARCH_MODE_MA_Tiled(uint32_t mode, uint64_t* startx, uint64_t* starty,
+	uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES, uint32_t maxFound, uint32_t* out)
+{
+	uint64_t dx[TILE_SIZE][4];
+	uint64_t px[4];
+	uint64_t py[4];
+	uint64_t pyn[4];
+	uint64_t sx[4];
+	uint64_t sy[4];
+	uint64_t dy[4];
+	uint64_t _s[4];
+	uint64_t _p2[4];
+
+	__syncthreads();
+	Load256A(sx, startx);
+	Load256A(sy, starty);
+	Load256(px, sx);
+	Load256(py, sy);
+
+	CHECK_HASH_SEARCH_MODE_MA(GRP_SIZE / 2);
+
+	ModNeg256(pyn, py);
+
+	for (uint32_t base = 0; base < HSIZE; base += TILE_SIZE) {
+		uint32_t tile_sz = TILE_SIZE;
+		if (base + TILE_SIZE > HSIZE) tile_sz = HSIZE - base;
+
+		for (uint32_t j = 0; j < tile_sz; j++)
+			ModSub256(dx[j], Gx + 4 * (base + j), sx);
+
+		_ModInvGroupedTiled(&dx[0][0], tile_sz, sx, base);
+
+		for (uint32_t j = 0; j < tile_sz; j++) {
+			uint32_t i = base + j;
+
+			Load256(px, sx);
+			Load256(py, sy);
+			ModSub256(dy, Gy + 4 * i, py);
+			_ModMult(_s, dy, dx[j]);
+			_ModSqr(_p2, _s);
+			ModSub256(px, _p2, px);
+			ModSub256(px, Gx + 4 * i);
+			ModSub256(py, Gx + 4 * i, px);
+			_ModMult(py, _s);
+			ModSub256(py, Gy + 4 * i);
+			CHECK_HASH_SEARCH_MODE_MA(GRP_SIZE / 2 + (i + 1));
+
+			Load256(px, sx);
+			ModSub256(dy, pyn, Gy + 4 * i);
+			_ModMult(_s, dy, dx[j]);
+			_ModSqr(_p2, _s);
+			ModSub256(px, _p2, px);
+			ModSub256(px, Gx + 4 * i);
+			ModSub256(py, px, Gx + 4 * i);
+			_ModMult(py, _s);
+			ModSub256(py, Gy + 4 * i, py);
+			CHECK_HASH_SEARCH_MODE_MA(GRP_SIZE / 2 - (i + 1));
+		}
+	}
+
+	uint64_t dx_last[4];
+	ModSub256(dx_last, Gx + 4 * HSIZE, sx);
+	_ModInv256(dx_last);
+
+	Load256(px, sx);
+	Load256(py, sy);
+	ModNeg256(dy, Gy + 4 * HSIZE);
+	ModSub256(dy, py);
+	_ModMult(_s, dy, dx_last);
+	_ModSqr(_p2, _s);
+	ModSub256(px, _p2, px);
+	ModSub256(px, Gx + 4 * HSIZE);
+	ModSub256(py, px, Gx + 4 * HSIZE);
+	_ModMult(py, _s);
+	ModSub256(py, Gy + 4 * HSIZE, py);
+	CHECK_HASH_SEARCH_MODE_MA(0);
+
+	uint64_t dx_next[4];
+	ModSub256(dx_next, _2Gnx, sx);
+	_ModInv256(dx_next);
+
+	Load256(px, sx);
+	Load256(py, sy);
+	ModSub256(dy, _2Gny, py);
+	_ModMult(_s, dy, dx_next);
+	_ModSqr(_p2, _s);
+	ModSub256(px, _p2, px);
+	ModSub256(px, _2Gnx);
+	ModSub256(py, _2Gnx, px);
+	_ModMult(py, _s);
+	ModSub256(py, _2Gny);
+
+	__syncthreads();
+	Store256A(startx, px);
+	Store256A(starty, py);
+}
+
+// -----------------------------------------------------------------------------------------
+
+__device__ void ComputeKeysSEARCH_MODE_SA_Tiled(uint32_t mode, uint64_t* startx, uint64_t* starty,
+	uint32_t* hash160, uint32_t maxFound, uint32_t* out)
+{
+	uint64_t dx[TILE_SIZE][4];
+	uint64_t px[4];
+	uint64_t py[4];
+	uint64_t pyn[4];
+	uint64_t sx[4];
+	uint64_t sy[4];
+	uint64_t dy[4];
+	uint64_t _s[4];
+	uint64_t _p2[4];
+
+	__syncthreads();
+	Load256A(sx, startx);
+	Load256A(sy, starty);
+	Load256(px, sx);
+	Load256(py, sy);
+
+	CHECK_HASH_SEARCH_MODE_SA(GRP_SIZE / 2);
+
+	ModNeg256(pyn, py);
+
+	for (uint32_t base = 0; base < HSIZE; base += TILE_SIZE) {
+		uint32_t tile_sz = TILE_SIZE;
+		if (base + TILE_SIZE > HSIZE) tile_sz = HSIZE - base;
+
+		for (uint32_t j = 0; j < tile_sz; j++)
+			ModSub256(dx[j], Gx + 4 * (base + j), sx);
+
+		_ModInvGroupedTiled(&dx[0][0], tile_sz, sx, base);
+
+		for (uint32_t j = 0; j < tile_sz; j++) {
+			uint32_t i = base + j;
+
+			Load256(px, sx);
+			Load256(py, sy);
+			ModSub256(dy, Gy + 4 * i, py);
+			_ModMult(_s, dy, dx[j]);
+			_ModSqr(_p2, _s);
+			ModSub256(px, _p2, px);
+			ModSub256(px, Gx + 4 * i);
+			ModSub256(py, Gx + 4 * i, px);
+			_ModMult(py, _s);
+			ModSub256(py, Gy + 4 * i);
+			CHECK_HASH_SEARCH_MODE_SA(GRP_SIZE / 2 + (i + 1));
+
+			Load256(px, sx);
+			ModSub256(dy, pyn, Gy + 4 * i);
+			_ModMult(_s, dy, dx[j]);
+			_ModSqr(_p2, _s);
+			ModSub256(px, _p2, px);
+			ModSub256(px, Gx + 4 * i);
+			ModSub256(py, px, Gx + 4 * i);
+			_ModMult(py, _s);
+			ModSub256(py, Gy + 4 * i, py);
+			CHECK_HASH_SEARCH_MODE_SA(GRP_SIZE / 2 - (i + 1));
+		}
+	}
+
+	uint64_t dx_last[4];
+	ModSub256(dx_last, Gx + 4 * HSIZE, sx);
+	_ModInv256(dx_last);
+
+	Load256(px, sx);
+	Load256(py, sy);
+	ModNeg256(dy, Gy + 4 * HSIZE);
+	ModSub256(dy, py);
+	_ModMult(_s, dy, dx_last);
+	_ModSqr(_p2, _s);
+	ModSub256(px, _p2, px);
+	ModSub256(px, Gx + 4 * HSIZE);
+	ModSub256(py, px, Gx + 4 * HSIZE);
+	_ModMult(py, _s);
+	ModSub256(py, Gy + 4 * HSIZE, py);
+	CHECK_HASH_SEARCH_MODE_SA(0);
+
+	uint64_t dx_next[4];
+	ModSub256(dx_next, _2Gnx, sx);
+	_ModInv256(dx_next);
+
+	Load256(px, sx);
+	Load256(py, sy);
+	ModSub256(dy, _2Gny, py);
+	_ModMult(_s, dy, dx_next);
+	_ModSqr(_p2, _s);
+	ModSub256(px, _p2, px);
+	ModSub256(px, _2Gnx);
+	ModSub256(py, _2Gnx, px);
+	_ModMult(py, _s);
+	ModSub256(py, _2Gny);
+
+	__syncthreads();
+	Store256A(startx, px);
+	Store256A(starty, py);
+}
+
+// -----------------------------------------------------------------------------------------
+
+__device__ void ComputeKeysSEARCH_MODE_MX_Tiled(uint32_t mode, uint64_t* startx, uint64_t* starty,
+	uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES, uint32_t maxFound, uint32_t* out)
+{
+	uint64_t dx[TILE_SIZE][4];
+	uint64_t px[4];
+	uint64_t py[4];
+	uint64_t pyn[4];
+	uint64_t sx[4];
+	uint64_t sy[4];
+	uint64_t dy[4];
+	uint64_t _s[4];
+	uint64_t _p2[4];
+
+	__syncthreads();
+	Load256A(sx, startx);
+	Load256A(sy, starty);
+	Load256(px, sx);
+	Load256(py, sy);
+
+	CHECK_PUB_SEARCH_MODE_MX(GRP_SIZE / 2);
+
+	ModNeg256(pyn, py);
+
+	for (uint32_t base = 0; base < HSIZE; base += TILE_SIZE) {
+		uint32_t tile_sz = TILE_SIZE;
+		if (base + TILE_SIZE > HSIZE) tile_sz = HSIZE - base;
+
+		for (uint32_t j = 0; j < tile_sz; j++)
+			ModSub256(dx[j], Gx + 4 * (base + j), sx);
+
+		_ModInvGroupedTiled(&dx[0][0], tile_sz, sx, base);
+
+		for (uint32_t j = 0; j < tile_sz; j++) {
+			uint32_t i = base + j;
+
+			Load256(px, sx);
+			Load256(py, sy);
+			ModSub256(dy, Gy + 4 * i, py);
+			_ModMult(_s, dy, dx[j]);
+			_ModSqr(_p2, _s);
+			ModSub256(px, _p2, px);
+			ModSub256(px, Gx + 4 * i);
+			ModSub256(py, Gx + 4 * i, px);
+			_ModMult(py, _s);
+			ModSub256(py, Gy + 4 * i);
+			CHECK_PUB_SEARCH_MODE_MX(GRP_SIZE / 2 + (i + 1));
+
+			Load256(px, sx);
+			ModSub256(dy, pyn, Gy + 4 * i);
+			_ModMult(_s, dy, dx[j]);
+			_ModSqr(_p2, _s);
+			ModSub256(px, _p2, px);
+			ModSub256(px, Gx + 4 * i);
+			ModSub256(py, px, Gx + 4 * i);
+			_ModMult(py, _s);
+			ModSub256(py, Gy + 4 * i, py);
+			CHECK_PUB_SEARCH_MODE_MX(GRP_SIZE / 2 - (i + 1));
+		}
+	}
+
+	uint64_t dx_last[4];
+	ModSub256(dx_last, Gx + 4 * HSIZE, sx);
+	_ModInv256(dx_last);
+
+	Load256(px, sx);
+	Load256(py, sy);
+	ModNeg256(dy, Gy + 4 * HSIZE);
+	ModSub256(dy, py);
+	_ModMult(_s, dy, dx_last);
+	_ModSqr(_p2, _s);
+	ModSub256(px, _p2, px);
+	ModSub256(px, Gx + 4 * HSIZE);
+	ModSub256(py, px, Gx + 4 * HSIZE);
+	_ModMult(py, _s);
+	ModSub256(py, Gy + 4 * HSIZE, py);
+	CHECK_PUB_SEARCH_MODE_MX(0);
+
+	uint64_t dx_next[4];
+	ModSub256(dx_next, _2Gnx, sx);
+	_ModInv256(dx_next);
+
+	Load256(px, sx);
+	Load256(py, sy);
+	ModSub256(dy, _2Gny, py);
+	_ModMult(_s, dy, dx_next);
+	_ModSqr(_p2, _s);
+	ModSub256(px, _p2, px);
+	ModSub256(px, _2Gnx);
+	ModSub256(py, _2Gnx, px);
+	_ModMult(py, _s);
+	ModSub256(py, _2Gny);
+
+	__syncthreads();
+	Store256A(startx, px);
+	Store256A(starty, py);
+}
+
+// -----------------------------------------------------------------------------------------
+
+__device__ void ComputeKeysSEARCH_MODE_SX_Tiled(uint32_t mode, uint64_t* startx, uint64_t* starty,
+	uint32_t* xpoint, uint32_t maxFound, uint32_t* out)
+{
+	uint64_t dx[TILE_SIZE][4];
+	uint64_t px[4];
+	uint64_t py[4];
+	uint64_t pyn[4];
+	uint64_t sx[4];
+	uint64_t sy[4];
+	uint64_t dy[4];
+	uint64_t _s[4];
+	uint64_t _p2[4];
+
+	__syncthreads();
+	Load256A(sx, startx);
+	Load256A(sy, starty);
+	Load256(px, sx);
+	Load256(py, sy);
+
+	CHECK_PUB_SEARCH_MODE_SX(GRP_SIZE / 2);
+
+	ModNeg256(pyn, py);
+
+	for (uint32_t base = 0; base < HSIZE; base += TILE_SIZE) {
+		uint32_t tile_sz = TILE_SIZE;
+		if (base + TILE_SIZE > HSIZE) tile_sz = HSIZE - base;
+
+		for (uint32_t j = 0; j < tile_sz; j++)
+			ModSub256(dx[j], Gx + 4 * (base + j), sx);
+
+		_ModInvGroupedTiled(&dx[0][0], tile_sz, sx, base);
+
+		for (uint32_t j = 0; j < tile_sz; j++) {
+			uint32_t i = base + j;
+
+			Load256(px, sx);
+			Load256(py, sy);
+			ModSub256(dy, Gy + 4 * i, py);
+			_ModMult(_s, dy, dx[j]);
+			_ModSqr(_p2, _s);
+			ModSub256(px, _p2, px);
+			ModSub256(px, Gx + 4 * i);
+			ModSub256(py, Gx + 4 * i, px);
+			_ModMult(py, _s);
+			ModSub256(py, Gy + 4 * i);
+			CHECK_PUB_SEARCH_MODE_SX(GRP_SIZE / 2 + (i + 1));
+
+			Load256(px, sx);
+			ModSub256(dy, pyn, Gy + 4 * i);
+			_ModMult(_s, dy, dx[j]);
+			_ModSqr(_p2, _s);
+			ModSub256(px, _p2, px);
+			ModSub256(px, Gx + 4 * i);
+			ModSub256(py, px, Gx + 4 * i);
+			_ModMult(py, _s);
+			ModSub256(py, Gy + 4 * i, py);
+			CHECK_PUB_SEARCH_MODE_SX(GRP_SIZE / 2 - (i + 1));
+		}
+	}
+
+	uint64_t dx_last[4];
+	ModSub256(dx_last, Gx + 4 * HSIZE, sx);
+	_ModInv256(dx_last);
+
+	Load256(px, sx);
+	Load256(py, sy);
+	ModNeg256(dy, Gy + 4 * HSIZE);
+	ModSub256(dy, py);
+	_ModMult(_s, dy, dx_last);
+	_ModSqr(_p2, _s);
+	ModSub256(px, _p2, px);
+	ModSub256(px, Gx + 4 * HSIZE);
+	ModSub256(py, px, Gx + 4 * HSIZE);
+	_ModMult(py, _s);
+	ModSub256(py, Gy + 4 * HSIZE, py);
+	CHECK_PUB_SEARCH_MODE_SX(0);
+
+	uint64_t dx_next[4];
+	ModSub256(dx_next, _2Gnx, sx);
+	_ModInv256(dx_next);
+
+	Load256(px, sx);
+	Load256(py, sy);
+	ModSub256(dy, _2Gny, py);
+	_ModMult(_s, dy, dx_next);
+	_ModSqr(_p2, _s);
+	ModSub256(px, _p2, px);
+	ModSub256(px, _2Gnx);
+	ModSub256(py, _2Gnx, px);
+	_ModMult(py, _s);
+	ModSub256(py, _2Gny);
+
+	__syncthreads();
+	Store256A(startx, px);
+	Store256A(starty, py);
 }
 

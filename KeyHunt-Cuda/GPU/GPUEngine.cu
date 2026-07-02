@@ -46,64 +46,101 @@ inline void __cudaSafeCall(cudaError err, const char* file, const int line)
 // ---------------------------------------------------------------------------------------
 
 // mode multiple addresses
-__global__ void compute_keys_mode_ma(uint32_t mode, uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES,
+__global__ __launch_bounds__(128) void compute_keys_mode_ma(uint32_t mode, uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES,
 	uint64_t* keys, uint32_t maxFound, uint32_t* found)
 {
-
 	int xPtr = (blockIdx.x * blockDim.x) * 8;
 	int yPtr = xPtr + 4 * blockDim.x;
 	ComputeKeysSEARCH_MODE_MA(mode, keys + xPtr, keys + yPtr, bloomLookUp, BLOOM_BITS, BLOOM_HASHES, maxFound, found);
-
 }
 
-__global__ void compute_keys_comp_mode_ma(uint32_t mode, uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES, uint64_t* keys,
+__global__ __launch_bounds__(128) void compute_keys_comp_mode_ma(uint32_t mode, uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES, uint64_t* keys,
 	uint32_t maxFound, uint32_t* found)
 {
-
 	int xPtr = (blockIdx.x * blockDim.x) * 8;
 	int yPtr = xPtr + 4 * blockDim.x;
 	ComputeKeysSEARCH_MODE_MA(mode, keys + xPtr, keys + yPtr, bloomLookUp, BLOOM_BITS, BLOOM_HASHES, maxFound, found);
+}
 
+// mode multiple addresses — tiled
+__global__ __launch_bounds__(128) void compute_keys_mode_ma_tiled(uint32_t mode, uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES,
+	uint64_t* keys, uint32_t maxFound, uint32_t* found)
+{
+	int xPtr = (blockIdx.x * blockDim.x) * 8;
+	int yPtr = xPtr + 4 * blockDim.x;
+	ComputeKeysSEARCH_MODE_MA_Tiled(mode, keys + xPtr, keys + yPtr, bloomLookUp, BLOOM_BITS, BLOOM_HASHES, maxFound, found);
+}
+
+__global__ __launch_bounds__(128) void compute_keys_comp_mode_ma_tiled(uint32_t mode, uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES, uint64_t* keys,
+	uint32_t maxFound, uint32_t* found)
+{
+	int xPtr = (blockIdx.x * blockDim.x) * 8;
+	int yPtr = xPtr + 4 * blockDim.x;
+	ComputeKeysSEARCH_MODE_MA_Tiled(mode, keys + xPtr, keys + yPtr, bloomLookUp, BLOOM_BITS, BLOOM_HASHES, maxFound, found);
 }
 
 // mode single address
-__global__ void compute_keys_mode_sa(uint32_t mode, uint32_t* hash160, uint64_t* keys, uint32_t maxFound, uint32_t* found)
+__global__ __launch_bounds__(128) void compute_keys_mode_sa(uint32_t mode, uint32_t* hash160, uint64_t* keys, uint32_t maxFound, uint32_t* found)
 {
-
 	int xPtr = (blockIdx.x * blockDim.x) * 8;
 	int yPtr = xPtr + 4 * blockDim.x;
 	ComputeKeysSEARCH_MODE_SA(mode, keys + xPtr, keys + yPtr, hash160, maxFound, found);
-
 }
 
-__global__ void compute_keys_comp_mode_sa(uint32_t mode, uint32_t* hash160, uint64_t* keys, uint32_t maxFound, uint32_t* found)
+__global__ __launch_bounds__(128) void compute_keys_comp_mode_sa(uint32_t mode, uint32_t* hash160, uint64_t* keys, uint32_t maxFound, uint32_t* found)
 {
-
 	int xPtr = (blockIdx.x * blockDim.x) * 8;
 	int yPtr = xPtr + 4 * blockDim.x;
 	ComputeKeysSEARCH_MODE_SA(mode, keys + xPtr, keys + yPtr, hash160, maxFound, found);
+}
 
+// mode single address — tiled
+__global__ __launch_bounds__(128) void compute_keys_mode_sa_tiled(uint32_t mode, uint32_t* hash160, uint64_t* keys, uint32_t maxFound, uint32_t* found)
+{
+	int xPtr = (blockIdx.x * blockDim.x) * 8;
+	int yPtr = xPtr + 4 * blockDim.x;
+	ComputeKeysSEARCH_MODE_SA_Tiled(mode, keys + xPtr, keys + yPtr, hash160, maxFound, found);
+}
+
+__global__ __launch_bounds__(128) void compute_keys_comp_mode_sa_tiled(uint32_t mode, uint32_t* hash160, uint64_t* keys, uint32_t maxFound, uint32_t* found)
+{
+	int xPtr = (blockIdx.x * blockDim.x) * 8;
+	int yPtr = xPtr + 4 * blockDim.x;
+	ComputeKeysSEARCH_MODE_SA_Tiled(mode, keys + xPtr, keys + yPtr, hash160, maxFound, found);
 }
 
 // mode multiple x points
-__global__ void compute_keys_comp_mode_mx(uint32_t mode, uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES, uint64_t* keys,
+__global__ __launch_bounds__(128) void compute_keys_comp_mode_mx(uint32_t mode, uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES, uint64_t* keys,
 	uint32_t maxFound, uint32_t* found)
 {
-
 	int xPtr = (blockIdx.x * blockDim.x) * 8;
 	int yPtr = xPtr + 4 * blockDim.x;
 	ComputeKeysSEARCH_MODE_MX(mode, keys + xPtr, keys + yPtr, bloomLookUp, BLOOM_BITS, BLOOM_HASHES, maxFound, found);
+}
 
+// mode multiple x points — tiled
+__global__ __launch_bounds__(128) void compute_keys_comp_mode_mx_tiled(uint32_t mode, uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES, uint64_t* keys,
+	uint32_t maxFound, uint32_t* found)
+{
+	int xPtr = (blockIdx.x * blockDim.x) * 8;
+	int yPtr = xPtr + 4 * blockDim.x;
+	ComputeKeysSEARCH_MODE_MX_Tiled(mode, keys + xPtr, keys + yPtr, bloomLookUp, BLOOM_BITS, BLOOM_HASHES, maxFound, found);
 }
 
 // mode single x point
-__global__ void compute_keys_comp_mode_sx(uint32_t mode, uint32_t* xpoint, uint64_t* keys, uint32_t maxFound, uint32_t* found)
+__global__ __launch_bounds__(128) void compute_keys_comp_mode_sx(uint32_t mode, uint32_t* xpoint, uint64_t* keys, uint32_t maxFound, uint32_t* found)
 {
-
 	int xPtr = (blockIdx.x * blockDim.x) * 8;
 	int yPtr = xPtr + 4 * blockDim.x;
 	ComputeKeysSEARCH_MODE_SX(mode, keys + xPtr, keys + yPtr, xpoint, maxFound, found);
+}
 
+// mode single x point — tiled
+__global__ __launch_bounds__(128) void compute_keys_comp_mode_sx_tiled(uint32_t mode, uint32_t* xpoint, uint64_t* keys, uint32_t maxFound, uint32_t* found)
+{
+	int xPtr = (blockIdx.x * blockDim.x) * 8;
+	int yPtr = xPtr + 4 * blockDim.x;
+	ComputeKeysSEARCH_MODE_SX_Tiled(mode, keys + xPtr, keys + yPtr, xpoint, maxFound, found);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -176,6 +213,8 @@ GPUEngine::GPUEngine(Secp256K1* secp, int nbThreadGroup, int nbThreadPerGroup, i
 	this->TOTAL_COUNT = TOTAL_COUNT;
 
 	initialised = false;
+
+	this->useTiling = false;
 
 	int deviceCount = 0;
 	CudaSafeCall(cudaGetDeviceCount(&deviceCount));
@@ -254,6 +293,8 @@ GPUEngine::GPUEngine(Secp256K1* secp, int nbThreadGroup, int nbThreadPerGroup, i
 	this->rKey = rKey;
 
 	initialised = false;
+
+	this->useTiling = false;
 
 	int deviceCount = 0;
 	CudaSafeCall(cudaGetDeviceCount(&deviceCount));
@@ -499,6 +540,27 @@ bool GPUEngine::callKernelSEARCH_MODE_MA()
 
 // ----------------------------------------------------------------------------
 
+bool GPUEngine::callKernelSEARCH_MODE_MA_Tiled()
+{
+	CudaSafeCall(cudaMemset(outputBuffer, 0, 4));
+	if (compMode == SEARCH_COMPRESSED) {
+		compute_keys_comp_mode_ma_tiled << < nbThread / nbThreadPerGroup, nbThreadPerGroup >> >
+			(compMode, inputBloomLookUp, BLOOM_BITS, BLOOM_HASHES, inputKey, maxFound, outputBuffer);
+	}
+	else {
+		compute_keys_mode_ma_tiled << < nbThread / nbThreadPerGroup, nbThreadPerGroup >> >
+			(compMode, inputBloomLookUp, BLOOM_BITS, BLOOM_HASHES, inputKey, maxFound, outputBuffer);
+	}
+	cudaError_t err = cudaGetLastError();
+	if (err != cudaSuccess) {
+		printf("GPUEngine: Kernel: %s\n", cudaGetErrorString(err));
+		return false;
+	}
+	return true;
+}
+
+// ----------------------------------------------------------------------------
+
 bool GPUEngine::callKernelSEARCH_MODE_MX()
 {
 
@@ -515,6 +577,27 @@ bool GPUEngine::callKernelSEARCH_MODE_MX()
 		return false;
 	}
 
+	cudaError_t err = cudaGetLastError();
+	if (err != cudaSuccess) {
+		printf("GPUEngine: Kernel: %s\n", cudaGetErrorString(err));
+		return false;
+	}
+	return true;
+}
+
+// ----------------------------------------------------------------------------
+
+bool GPUEngine::callKernelSEARCH_MODE_MX_Tiled()
+{
+	CudaSafeCall(cudaMemset(outputBuffer, 0, 4));
+	if (compMode == SEARCH_COMPRESSED) {
+		compute_keys_comp_mode_mx_tiled << < nbThread / nbThreadPerGroup, nbThreadPerGroup >> >
+			(compMode, inputBloomLookUp, BLOOM_BITS, BLOOM_HASHES, inputKey, maxFound, outputBuffer);
+	}
+	else {
+		printf("GPUEngine: PubKeys search doesn't support uncompressed\n");
+		return false;
+	}
 	cudaError_t err = cudaGetLastError();
 	if (err != cudaSuccess) {
 		printf("GPUEngine: Kernel: %s\n", cudaGetErrorString(err));
@@ -552,6 +635,27 @@ bool GPUEngine::callKernelSEARCH_MODE_SA()
 
 // ----------------------------------------------------------------------------
 
+bool GPUEngine::callKernelSEARCH_MODE_SA_Tiled()
+{
+	CudaSafeCall(cudaMemset(outputBuffer, 0, 4));
+	if (compMode == SEARCH_COMPRESSED) {
+		compute_keys_comp_mode_sa_tiled << < nbThread / nbThreadPerGroup, nbThreadPerGroup >> >
+			(compMode, inputHashORxpoint, inputKey, maxFound, outputBuffer);
+	}
+	else {
+		compute_keys_mode_sa_tiled << < nbThread / nbThreadPerGroup, nbThreadPerGroup >> >
+			(compMode, inputHashORxpoint, inputKey, maxFound, outputBuffer);
+	}
+	cudaError_t err = cudaGetLastError();
+	if (err != cudaSuccess) {
+		printf("GPUEngine: Kernel: %s\n", cudaGetErrorString(err));
+		return false;
+	}
+	return true;
+}
+
+// ----------------------------------------------------------------------------
+
 bool GPUEngine::callKernelSEARCH_MODE_SX()
 {
 
@@ -568,6 +672,27 @@ bool GPUEngine::callKernelSEARCH_MODE_SX()
 		return false;
 	}
 
+	cudaError_t err = cudaGetLastError();
+	if (err != cudaSuccess) {
+		printf("GPUEngine: Kernel: %s\n", cudaGetErrorString(err));
+		return false;
+	}
+	return true;
+}
+
+// ----------------------------------------------------------------------------
+
+bool GPUEngine::callKernelSEARCH_MODE_SX_Tiled()
+{
+	CudaSafeCall(cudaMemset(outputBuffer, 0, 4));
+	if (compMode == SEARCH_COMPRESSED) {
+		compute_keys_comp_mode_sx_tiled << < nbThread / nbThreadPerGroup, nbThreadPerGroup >> >
+			(compMode, inputHashORxpoint, inputKey, maxFound, outputBuffer);
+	}
+	else {
+		printf("GPUEngine: PubKeys search doesn't support uncompressed\n");
+		return false;
+	}
 	cudaError_t err = cudaGetLastError();
 	if (err != cudaSuccess) {
 		printf("GPUEngine: Kernel: %s\n", cudaGetErrorString(err));
@@ -609,17 +734,13 @@ bool GPUEngine::SetKeys(Point* p)
 
 	switch (searchMode) {
 	case (int)SEARCH_MODE_MA:
-		return callKernelSEARCH_MODE_MA();
-		break;
+		return useTiling ? callKernelSEARCH_MODE_MA_Tiled() : callKernelSEARCH_MODE_MA();
 	case (int)SEARCH_MODE_SA:
-		return callKernelSEARCH_MODE_SA();
-		break;
+		return useTiling ? callKernelSEARCH_MODE_SA_Tiled() : callKernelSEARCH_MODE_SA();
 	case (int)SEARCH_MODE_MX:
-		return callKernelSEARCH_MODE_MX();
-		break;
+		return useTiling ? callKernelSEARCH_MODE_MX_Tiled() : callKernelSEARCH_MODE_MX();
 	case (int)SEARCH_MODE_SX:
-		return callKernelSEARCH_MODE_SX();
-		break;
+		return useTiling ? callKernelSEARCH_MODE_SX_Tiled() : callKernelSEARCH_MODE_SX();
 	default:
 		return false;
 		break;
@@ -675,7 +796,7 @@ bool GPUEngine::LaunchSEARCH_MODE_MA(std::vector<ITEM>& dataFound, bool spinWait
 			dataFound.push_back(it);
 		}
 	}
-	return callKernelSEARCH_MODE_MA();
+	return useTiling ? callKernelSEARCH_MODE_MA_Tiled() : callKernelSEARCH_MODE_MA();
 }
 
 // ----------------------------------------------------------------------------
@@ -722,7 +843,7 @@ bool GPUEngine::LaunchSEARCH_MODE_SA(std::vector<ITEM>& dataFound, bool spinWait
 		it.hash = (uint8_t*)(itemPtr + 2);
 		dataFound.push_back(it);
 	}
-	return callKernelSEARCH_MODE_SA();
+	return useTiling ? callKernelSEARCH_MODE_SA_Tiled() : callKernelSEARCH_MODE_SA();
 }
 
 // ----------------------------------------------------------------------------
@@ -775,7 +896,7 @@ bool GPUEngine::LaunchSEARCH_MODE_MX(std::vector<ITEM>& dataFound, bool spinWait
 			dataFound.push_back(it);
 		}
 	}
-	return callKernelSEARCH_MODE_MX();
+	return useTiling ? callKernelSEARCH_MODE_MX_Tiled() : callKernelSEARCH_MODE_MX();
 }
 
 // ----------------------------------------------------------------------------
@@ -825,7 +946,7 @@ bool GPUEngine::LaunchSEARCH_MODE_SX(std::vector<ITEM>& dataFound, bool spinWait
 		it.hash = (uint8_t*)(itemPtr + 2);
 		dataFound.push_back(it);
 	}
-	return callKernelSEARCH_MODE_SX();
+	return useTiling ? callKernelSEARCH_MODE_SX_Tiled() : callKernelSEARCH_MODE_SX();
 }
 
 // ----------------------------------------------------------------------------
@@ -858,6 +979,120 @@ int GPUEngine::CheckBinary(const uint8_t* _x, int K_LENGTH)
 		}
 	}
 	return r;
+}
+
+// ----------------------------------------------------------------------------
+// Benchmark old vs tiled kernel
+// ----------------------------------------------------------------------------
+
+void GPUEngine::BenchmarkTiling()
+{
+#define BENCH_ITER 200
+#define BENCH_WARMUP 10
+
+	if (!initialised) {
+		printf("BenchmarkTiling: GPUEngine not initialised\n");
+		return;
+	}
+
+	typedef bool (GPUEngine::*KernelFn)();
+	KernelFn oldFn = NULL;
+	KernelFn newFn = NULL;
+
+	switch (searchMode) {
+	case SEARCH_MODE_MA: oldFn = &GPUEngine::callKernelSEARCH_MODE_MA;    newFn = &GPUEngine::callKernelSEARCH_MODE_MA_Tiled;    break;
+	case SEARCH_MODE_SA: oldFn = &GPUEngine::callKernelSEARCH_MODE_SA;    newFn = &GPUEngine::callKernelSEARCH_MODE_SA_Tiled;    break;
+	case SEARCH_MODE_MX: oldFn = &GPUEngine::callKernelSEARCH_MODE_MX;    newFn = &GPUEngine::callKernelSEARCH_MODE_MX_Tiled;    break;
+	case SEARCH_MODE_SX: oldFn = &GPUEngine::callKernelSEARCH_MODE_SX;    newFn = &GPUEngine::callKernelSEARCH_MODE_SX_Tiled;    break;
+	default:             printf("BenchmarkTiling: unknown search mode %d\n", searchMode); return;
+	}
+
+	// ---- correctness check: old and tiled must produce identical keys ----
+	size_t keyBytes = (size_t)nbThread * 32 * 2;
+	uint64_t* hostKeys = (uint64_t*)malloc(keyBytes);
+	uint64_t* hostOld  = (uint64_t*)malloc(keyBytes);
+	uint64_t* hostNew  = (uint64_t*)malloc(keyBytes);
+
+	if (!hostKeys || !hostOld || !hostNew) {
+		printf("BenchmarkTiling: malloc failed\n");
+		free(hostKeys); free(hostOld); free(hostNew);
+		return;
+	}
+
+	CudaSafeCall(cudaMemcpy(hostKeys, inputKey, keyBytes, cudaMemcpyDeviceToHost));
+
+	(this->*oldFn)();
+	cudaDeviceSynchronize();
+	CudaSafeCall(cudaMemcpy(hostOld, inputKey, keyBytes, cudaMemcpyDeviceToHost));
+
+	CudaSafeCall(cudaMemcpy(inputKey, hostKeys, keyBytes, cudaMemcpyHostToDevice));
+
+	(this->*newFn)();
+	cudaDeviceSynchronize();
+	CudaSafeCall(cudaMemcpy(hostNew, inputKey, keyBytes, cudaMemcpyDeviceToHost));
+
+	int mismatch = 0;
+	for (size_t i = 0; i < keyBytes / 8; i++) {
+		if (hostOld[i] != hostNew[i]) {
+			if (mismatch < 10)
+				printf("  mismatch at thread %zu offset %zu: old=0x%016llx new=0x%016llx\n",
+					i / 8, i % 8, (unsigned long long)hostOld[i], (unsigned long long)hostNew[i]);
+			mismatch++;
+		}
+	}
+
+	if (mismatch) {
+		printf("\n--- Tiling CORRECTNESS FAILED: %d of %zu words differ ---\n", mismatch, keyBytes / 8);
+	}
+	else {
+		printf("\n--- Tiling CORRECTNESS OK: all %zu words match ---\n", keyBytes / 8);
+	}
+
+	free(hostOld);
+	free(hostNew);
+
+	// Restore original keys to device for benchmark (hostKeys still valid)
+	CudaSafeCall(cudaMemcpy(inputKey, hostKeys, keyBytes, cudaMemcpyHostToDevice));
+	free(hostKeys);
+
+	// ---- timing benchmark ----
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+	for (int i = 0; i < BENCH_WARMUP; i++) (this->*oldFn)();
+	cudaDeviceSynchronize();
+	for (int i = 0; i < BENCH_WARMUP; i++) (this->*newFn)();
+	cudaDeviceSynchronize();
+
+	cudaEventRecord(start, 0);
+	for (int i = 0; i < BENCH_ITER; i++) (this->*oldFn)();
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
+	float oldMs;
+	cudaEventElapsedTime(&oldMs, start, stop);
+
+	cudaEventRecord(start, 0);
+	for (int i = 0; i < BENCH_ITER; i++) (this->*newFn)();
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
+	float newMs;
+	cudaEventElapsedTime(&newMs, start, stop);
+
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
+
+	double oldMk = (double)BENCH_ITER * STEP_SIZE * nbThread / (oldMs * 1000.0);
+	double newMk = (double)BENCH_ITER * STEP_SIZE * nbThread / (newMs * 1000.0);
+
+	if (!mismatch) {
+		printf("--- Tiling Benchmark (%d iters) ---\n", BENCH_ITER);
+		printf("Mode  : %d\n", searchMode);
+		printf("Grid  : %d blocks x %d threads (%d total)\n", nbThread / nbThreadPerGroup, nbThreadPerGroup, nbThread);
+		printf("Old   : %.2f Mk/s  (%.3f ms/iter)\n", oldMk, oldMs / BENCH_ITER);
+		printf("Tiled : %.2f Mk/s  (%.3f ms/iter)\n", newMk, newMs / BENCH_ITER);
+		printf("Speedup: %.2fx\n", newMk / oldMk);
+	}
 }
 
 

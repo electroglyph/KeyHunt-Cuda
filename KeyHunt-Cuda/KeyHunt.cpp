@@ -30,6 +30,8 @@ KeyHunt::KeyHunt(const std::string& inputFile, int compMode, int searchMode, boo
 	this->outputFile = outputFile;
 	this->useSSE = useSSE;
 	this->nbGPUThread = 0;
+	this->useTiling = false;
+	this->benchmarkTiling = false;
 	this->inputFile = inputFile;
 	this->maxFound = maxFound;
 	this->rKey = rKey;
@@ -130,6 +132,8 @@ KeyHunt::KeyHunt(const std::vector<unsigned char>& hashORxpoint, int compMode, i
 	this->outputFile = outputFile;
 	this->useSSE = useSSE;
 	this->nbGPUThread = 0;
+	this->useTiling = false;
+	this->benchmarkTiling = false;
 	this->maxFound = maxFound;
 	this->rKey = rKey;
 	this->searchMode = searchMode;
@@ -803,6 +807,21 @@ void KeyHunt::FindKeyGPU(TH_PARAM * ph)
 		break;
 	}
 
+	g->SetTiling(useTiling);
+
+	if (benchmarkTiling) {
+		int nbThread = g->GetNbThread();
+		Point* bp = new Point[nbThread];
+		Int* bkeys = new Int[nbThread];
+		getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, bkeys, bp);
+		g->SetKeys(bp);
+		g->BenchmarkTiling();
+		delete[] bkeys;
+		delete[] bp;
+		delete g;
+		ph->isRunning = false;
+		return;
+	}
 
 	int nbThread = g->GetNbThread();
 	Point* p = new Point[nbThread];

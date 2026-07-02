@@ -47,6 +47,8 @@ public:
 	~KeyHunt();
 
 	void Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSize, bool& should_exit);
+	void SetUseTiling(bool v) { useTiling = v; }
+	void SetBenchmarkTiling(bool v) { benchmarkTiling = v; }
 	void FindKeyCPU(TH_PARAM* p);
 	void FindKeyGPU(TH_PARAM* p);
 
@@ -99,6 +101,9 @@ private:
 	int nbGPUThread;
 	int nbFoundKey;
 	uint64_t targetCounter;
+
+	bool useTiling;
+	bool benchmarkTiling;
 
 	std::string outputFile;
 	std::string inputFile;

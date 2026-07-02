@@ -72,6 +72,8 @@ public:
 
 	int GetNbThread();
 	int GetGroupSize();
+	void SetTiling(bool enabled) { useTiling = enabled; }
+	void BenchmarkTiling();
 
 	//bool Check(Secp256K1 *secp);
 	std::string deviceName;
@@ -83,9 +85,13 @@ private:
 	void InitGenratorTable(Secp256K1* secp);
 
 	bool callKernelSEARCH_MODE_MA();
+	bool callKernelSEARCH_MODE_MA_Tiled();
 	bool callKernelSEARCH_MODE_SA();
+	bool callKernelSEARCH_MODE_SA_Tiled();
 	bool callKernelSEARCH_MODE_MX();
+	bool callKernelSEARCH_MODE_MX_Tiled();
 	bool callKernelSEARCH_MODE_SX();
+	bool callKernelSEARCH_MODE_SX_Tiled();
 
 	int CheckBinary(const uint8_t* x, int K_LENGTH);
 
@@ -112,6 +118,7 @@ private:
 	uint64_t* _Gy;
 
 	bool initialised;
+	bool useTiling;
 	uint32_t compMode;
 	uint32_t searchMode;
 	bool littleEndian;

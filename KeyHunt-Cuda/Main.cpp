@@ -191,6 +191,8 @@ int main(int argc, char** argv)
 
 	bool tSpecified = false;
 	bool useSSE = true;
+	bool useTiling = false;
+	bool benchmarkTiling = false;
 	uint32_t maxFound = 1024 * 64;
 
 	uint64_t rKey = 0;
@@ -221,6 +223,8 @@ int main(int argc, char** argv)
 	parser.add("", "--range", true);
 	parser.add("-r", "--rkey", true);
 	parser.add("-v", "--version", false);
+	parser.add("", "--tiled", false);
+	parser.add("", "--benchmark-tiling", false);
 
 	if (argc == 1) {
 		usage();
@@ -314,6 +318,12 @@ int main(int argc, char** argv)
 			else if (optArg.equals("-v", "--version")) {
 				printf("KeyHunt-Cuda v" RELEASE "\n");
 				return 0;
+			}
+			else if (optArg.equals("", "--tiled")) {
+				useTiling = true;
+			}
+			else if (optArg.equals("", "--benchmark-tiling")) {
+				benchmarkTiling = true;
 			}
 		}
 		catch (std::string err) {
@@ -506,6 +516,8 @@ int main(int argc, char** argv)
 			return 0;
 			break;
 		}
+		v->SetUseTiling(useTiling);
+		v->SetBenchmarkTiling(benchmarkTiling);
 		v->Search(nbCPUThread, gpuId, gridSize, should_exit);
 		delete v;
 		printf("\n\nBYE\n");
@@ -534,8 +546,10 @@ int main(int argc, char** argv)
 		return 0;
 		break;
 	}
-	v->Search(nbCPUThread, gpuId, gridSize, should_exit);
-	delete v;
-	return 0;
+		v->SetUseTiling(useTiling);
+		v->SetBenchmarkTiling(benchmarkTiling);
+		v->Search(nbCPUThread, gpuId, gridSize, should_exit);
+		delete v;
+		return 0;
 #endif
 }
